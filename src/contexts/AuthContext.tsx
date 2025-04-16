@@ -80,12 +80,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // Use demo mode for testing without a backend
       if (email === "demo@example.com" && password === "demo123") {
-        const demoUser = {
+        const demoUser: User = {
           id: "demo-user-id",
           name: "Demo User",
           email: "demo@example.com",
           role: "user",
-          is_approved: true,
+          isApproved: true,
+          createdAt: new Date(),
         };
         
         localStorage.setItem("token", "demo-token");
@@ -134,12 +135,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // For demo purposes, allow admin login
       if (email === "admin@example.com" && password === "admin123") {
-        const adminUser = {
+        const adminUser: User = {
           id: "admin-user-id",
           name: "Admin User",
           email: "admin@example.com",
           role: "admin",
-          is_approved: true,
+          isApproved: true,
+          createdAt: new Date(),
         };
         
         localStorage.setItem("token", "admin-token");
