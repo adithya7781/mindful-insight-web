@@ -200,6 +200,31 @@ const Scan = () => {
     }
   };
 
+  // Generate a random stress score for demo mode
+  const generateDemoStressResult = () => {
+    // Generate a realistic stress score (65-92 with some variation)
+    const baseScore = Math.random() * 27 + 65; // 65-92
+    const variation = Math.random() * 10 - 5; // -5 to 5
+    const score = Math.min(Math.max(baseScore + variation, 40), 95);
+    
+    // Determine stress level
+    let stressLevel: "low" | "medium" | "high";
+    if (score < 60) {
+      stressLevel = "low";
+    } else if (score < 80) {
+      stressLevel = "medium";
+    } else {
+      stressLevel = "high";
+    }
+    
+    return {
+      success: true,
+      stress_level: stressLevel,
+      stress_score: parseFloat(score.toFixed(1)),
+      result_image: activeTab === "camera" ? capturedImage : previewUrl,
+    };
+  };
+
   const analyzeImage = async () => {
     let imageToAnalyze: string | File | null = null;
     
@@ -238,42 +263,71 @@ const Scan = () => {
       
       console.log("Sending image for analysis...");
       
-      const response = await fetch(`${API_BASE_URL}/api/stress/analyze`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Server responded with status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      console.log("Analysis response:", data);
-      
-      if (data.success) {
-        // Process the face result
-        setResult({
-          stressLevel: data.stress_level,
-          score: data.stress_score,
-          resultImage: data.result_image || undefined
+      try {
+        // Try to connect to the backend first
+        const response = await fetch(`${API_BASE_URL}/api/stress/analyze`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData,
+          // Adding a short timeout to quickly fall back to demo mode if API is unavailable
+          signal: AbortSignal.timeout(3000)
         });
         
-        if (data.stress_level === 'high') {
-          toast.error("High Stress Detected", {
-            description: "Your stress levels are high. Consider taking a break.",
-          });
+        if (!response.ok) {
+          throw new Error(`Server responded with status: ${response.status}`);
         }
-      } else {
-        setError(data.message || 'Failed to analyze image');
+        
+        const data = await response.json();
+        console.log("Analysis response:", data);
+        
+        if (data.success) {
+          processAnalysisResult(data);
+        } else {
+          setError(data.message || 'Failed to analyze image');
+        }
+      } catch (err) {
+        console.error("Error analyzing image:", err);
+        
+        // If the backend is unavailable, use demo mode with simulated results
+        console.log("Falling back to demo mode for stress analysis");
+        toast.info("Using demo mode for analysis", {
+          description: "Backend connection unavailable. Using simulated results."
+        });
+        
+        // Use simulated data for demo mode
+        const demoData = generateDemoStressResult();
+        processAnalysisResult(demoData);
       }
     } catch (err) {
-      console.error("Error analyzing image:", err);
-      setError(`An error occurred during analysis: ${err instanceof Error ? err.message : 'Unknown error'}. Please try again.`);
+      console.error("General error:", err);
+      setError(`An unexpected error occurred. Please try again.`);
     } finally {
       setAnalyzing(false);
+    }
+  };
+  
+  const processAnalysisResult = (data: any) => {
+    // Process the face result
+    setResult({
+      stressLevel: data.stress_level,
+      score: data.stress_score,
+      resultImage: data.result_image || undefined
+    });
+    
+    if (data.stress_level === 'high') {
+      toast.error("High Stress Detected", {
+        description: "Your stress levels are high. Consider taking a break.",
+      });
+    } else if (data.stress_level === 'medium') {
+      toast.warning("Medium Stress Detected", {
+        description: "Your stress levels are moderate. Consider some relaxation techniques."
+      });
+    } else {
+      toast.success("Low Stress Detected", {
+        description: "Your stress levels are low. Keep up the good work!"
+      });
     }
   };
 
