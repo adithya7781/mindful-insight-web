@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -31,10 +31,10 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const Scan = () => {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   
   const [activeTab, setActiveTab] = useState<"camera" | "upload">("camera");
   const [cameraActive, setCameraActive] = useState(false);
@@ -59,44 +59,79 @@ const Scan = () => {
   // Cleanup function to stop camera when component unmounts
   useEffect(() => {
     return () => {
-      if (cameraActive) {
-        stopCamera();
-      }
+      stopCamera();
     };
-  }, [cameraActive]);
+  }, []);
 
   const startCamera = async () => {
     setError(null);
     setCameraError(null);
+    
     try {
+      // Stop any existing stream first
+      stopCamera();
+      
+      console.log("Requesting camera access...");
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
+        video: { facingMode: "user" },
         audio: false,
       });
       
+      streamRef.current = stream;
+      
       if (videoRef.current) {
+        console.log("Setting video stream...");
         videoRef.current.srcObject = stream;
+        videoRef.current.onloadedmetadata = () => {
+          if (videoRef.current) {
+            videoRef.current.play().catch(err => {
+              console.error("Error playing video:", err);
+              setCameraError("Failed to start video stream");
+            });
+          }
+        };
         setCameraActive(true);
+      } else {
+        console.error("Video reference is null");
+        setCameraError("Camera element not found");
       }
     } catch (err) {
       console.error("Error accessing camera:", err);
-      setCameraError("Failed to access camera. Please check browser permissions and try again.");
-      setError("Camera access denied. Please check your browser permissions.");
+      let errorMessage = "Failed to access camera. ";
+      
+      if (err instanceof DOMException) {
+        if (err.name === "NotAllowedError") {
+          errorMessage += "Camera access was denied. Please check your browser permissions.";
+        } else if (err.name === "NotFoundError") {
+          errorMessage += "No camera detected on this device.";
+        } else if (err.name === "NotReadableError") {
+          errorMessage += "Camera may be in use by another application.";
+        } else {
+          errorMessage += err.message;
+        }
+      } else {
+        errorMessage += "Please check browser permissions and try again.";
+      }
+      
+      setCameraError(errorMessage);
+      setError("Camera access failed. " + errorMessage);
     }
   };
 
   const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      const tracks = stream.getTracks();
-      
-      tracks.forEach((track) => {
+    if (streamRef.current) {
+      const tracks = streamRef.current.getTracks();
+      tracks.forEach(track => {
         track.stop();
       });
-      
-      videoRef.current.srcObject = null;
-      setCameraActive(false);
+      streamRef.current = null;
     }
+    
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    
+    setCameraActive(false);
   };
 
   const captureImage = () => {
@@ -104,26 +139,37 @@ const Scan = () => {
       const context = canvasRef.current.getContext("2d");
       
       if (context) {
-        // Match canvas dimensions to video
-        canvasRef.current.width = videoRef.current.videoWidth;
-        canvasRef.current.height = videoRef.current.videoHeight;
+        // Get video dimensions
+        const videoWidth = videoRef.current.videoWidth;
+        const videoHeight = videoRef.current.videoHeight;
+        
+        // Set canvas dimensions to match video
+        canvasRef.current.width = videoWidth;
+        canvasRef.current.height = videoHeight;
         
         // Draw video frame to canvas
         context.drawImage(
           videoRef.current,
           0,
           0,
-          canvasRef.current.width,
-          canvasRef.current.height
+          videoWidth,
+          videoHeight
         );
         
         // Convert canvas to data URL
-        const imageDataUrl = canvasRef.current.toDataURL("image/png");
-        setCapturedImage(imageDataUrl);
-        
-        // Stop camera
-        stopCamera();
+        try {
+          const imageDataUrl = canvasRef.current.toDataURL("image/jpeg", 0.8);
+          setCapturedImage(imageDataUrl);
+          
+          // Stop camera
+          stopCamera();
+        } catch (err) {
+          console.error("Error capturing image:", err);
+          setError("Failed to capture image. Please try again.");
+        }
       }
+    } else {
+      setError("Camera not initialized properly. Please restart the camera.");
     }
   };
 
@@ -190,6 +236,8 @@ const Scan = () => {
         return;
       }
       
+      console.log("Sending image for analysis...");
+      
       const response = await fetch(`${API_BASE_URL}/api/stress/analyze`, {
         method: 'POST',
         headers: {
@@ -198,7 +246,12 @@ const Scan = () => {
         body: formData
       });
       
+      if (!response.ok) {
+        throw new Error(`Server responded with status: ${response.status}`);
+      }
+      
       const data = await response.json();
+      console.log("Analysis response:", data);
       
       if (data.success) {
         // Process the face result
@@ -209,20 +262,17 @@ const Scan = () => {
         });
         
         if (data.stress_level === 'high') {
-          toast({
-            variant: "destructive",
-            title: "High Stress Detected",
+          toast.error("High Stress Detected", {
             description: "Your stress levels are high. Consider taking a break.",
           });
         }
       } else {
         setError(data.message || 'Failed to analyze image');
       }
-      
-      setAnalyzing(false);
     } catch (err) {
       console.error("Error analyzing image:", err);
-      setError("An error occurred during analysis. Please try again.");
+      setError(`An error occurred during analysis: ${err instanceof Error ? err.message : 'Unknown error'}. Please try again.`);
+    } finally {
       setAnalyzing(false);
     }
   };
@@ -234,6 +284,7 @@ const Scan = () => {
     setResult(null);
     setCameraActive(false);
     setCameraError(null);
+    setError(null);
     
     // Reset file input
     if (fileInputRef.current) {
@@ -245,44 +296,45 @@ const Scan = () => {
     if (!result) return;
     
     try {
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        toast({
-          variant: "destructive",
-          title: "Authentication Error",
-          description: "Please log in again to save your results."
-        });
-        return;
-      }
-      
-      // In a real implementation, this would save to the backend
-      toast({
-        title: "Result Saved",
+      navigate("/dashboard/results");
+      toast.success("Result Saved", {
         description: "Your stress analysis has been saved successfully.",
       });
-      
-      navigate("/dashboard/results");
     } catch (err) {
       console.error("Error saving result:", err);
-      toast({
-        variant: "destructive",
-        title: "Error Saving Result",
-        description: "Failed to save your stress analysis."
+      toast.error("Error Saving Result", {
+        description: "Failed to save your stress analysis.",
       });
     }
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-xl">Loading...</p>
-      </div>
+      <DashboardLayout>
+        <div className="min-h-screen flex items-center justify-center">
+          <p className="text-xl flex items-center">
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            Loading...
+          </p>
+        </div>
+      </DashboardLayout>
     );
   }
 
   if (!user || !user.isApproved) {
-    return null; // Will redirect in useEffect
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col gap-6">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Access Denied</AlertTitle>
+            <AlertDescription>
+              Your account needs to be approved by an administrator.
+            </AlertDescription>
+          </Alert>
+        </div>
+      </DashboardLayout>
+    );
   }
 
   return (
@@ -337,12 +389,12 @@ const Scan = () => {
                       </div>
                     )}
                     
-                    {cameraActive && (
+                    {!capturedImage && (
                       <video
                         ref={videoRef}
                         autoPlay
                         playsInline
-                        className="w-full h-full object-cover"
+                        className={`w-full h-full object-cover ${cameraActive ? 'block' : 'hidden'}`}
                       />
                     )}
                     
