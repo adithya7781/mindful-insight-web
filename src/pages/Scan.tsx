@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { 
   AlertCircle, 
   Camera, 
+  CameraOff,
   Check, 
   Loader2, 
   RefreshCw, 
@@ -25,6 +26,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 const Scan = () => {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
@@ -45,6 +48,7 @@ const Scan = () => {
     resultImage?: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && (!user || !user.isApproved)) {
@@ -63,6 +67,7 @@ const Scan = () => {
 
   const startCamera = async () => {
     setError(null);
+    setCameraError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -74,8 +79,9 @@ const Scan = () => {
         setCameraActive(true);
       }
     } catch (err) {
-      setError("Failed to access camera. Please check permissions and try again.");
       console.error("Error accessing camera:", err);
+      setCameraError("Failed to access camera. Please check browser permissions and try again.");
+      setError("Camera access denied. Please check your browser permissions.");
     }
   };
 
@@ -165,45 +171,7 @@ const Scan = () => {
     setAnalyzing(true);
     setError(null);
     
-    // In a real implementation, this would send the image to a backend API
-    // For this demo, we'll simulate the response after a delay
     try {
-      // Simulate API call
-      setTimeout(() => {
-        // Generate random score between 10-95 for demo purposes
-        const score = Math.floor(Math.random() * 85) + 10;
-        let stressLevel: "low" | "medium" | "high";
-        
-        if (score < 40) {
-          stressLevel = "low";
-        } else if (score < 70) {
-          stressLevel = "medium";
-        } else {
-          stressLevel = "high";
-        }
-        
-        // Create result
-        setResult({
-          stressLevel,
-          score,
-          resultImage: activeTab === "camera" ? capturedImage || undefined : previewUrl || undefined
-        });
-        
-        // Show notification for high stress
-        if (stressLevel === "high") {
-          toast({
-            variant: "destructive",
-            title: "High Stress Detected",
-            description: "Your stress levels are high. Consider taking a break.",
-          });
-        }
-        
-        setAnalyzing(false);
-      }, 2000);
-      
-      /* 
-      // Real implementation would look like this:
-      
       const formData = new FormData();
       
       if (typeof imageToAnalyze === 'string') {
@@ -214,10 +182,18 @@ const Scan = () => {
         formData.append('image', imageToAnalyze);
       }
       
-      const response = await fetch('/api/detect/image', {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        setError("Authentication error. Please log in again.");
+        setAnalyzing(false);
+        return;
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/api/stress/analyze`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: formData
       });
@@ -225,16 +201,14 @@ const Scan = () => {
       const data = await response.json();
       
       if (data.success) {
-        // Process the first face result
-        const faceResult = data.results[0];
-        
+        // Process the face result
         setResult({
-          stressLevel: faceResult.stress_category,
-          score: faceResult.stress_score,
-          resultImage: data.result_image
+          stressLevel: data.stress_level,
+          score: data.stress_score,
+          resultImage: data.result_image || undefined
         });
         
-        if (faceResult.stress_category === 'high') {
+        if (data.stress_level === 'high') {
           toast({
             variant: "destructive",
             title: "High Stress Detected",
@@ -246,8 +220,6 @@ const Scan = () => {
       }
       
       setAnalyzing(false);
-      */
-      
     } catch (err) {
       console.error("Error analyzing image:", err);
       setError("An error occurred during analysis. Please try again.");
@@ -261,6 +233,7 @@ const Scan = () => {
     setPreviewUrl(null);
     setResult(null);
     setCameraActive(false);
+    setCameraError(null);
     
     // Reset file input
     if (fileInputRef.current) {
@@ -268,16 +241,36 @@ const Scan = () => {
     }
   };
 
-  const saveResult = () => {
+  const saveResult = async () => {
     if (!result) return;
     
-    // Would send to backend in production
-    toast({
-      title: "Result Saved",
-      description: "Your stress analysis has been saved successfully.",
-    });
-    
-    navigate("/dashboard/results");
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        toast({
+          variant: "destructive",
+          title: "Authentication Error",
+          description: "Please log in again to save your results."
+        });
+        return;
+      }
+      
+      // In a real implementation, this would save to the backend
+      toast({
+        title: "Result Saved",
+        description: "Your stress analysis has been saved successfully.",
+      });
+      
+      navigate("/dashboard/results");
+    } catch (err) {
+      console.error("Error saving result:", err);
+      toast({
+        variant: "destructive",
+        title: "Error Saving Result",
+        description: "Failed to save your stress analysis."
+      });
+    }
   };
 
   if (isLoading) {
@@ -332,8 +325,15 @@ const Scan = () => {
                 <TabsContent value="camera" className="w-full">
                   <div className="relative w-full aspect-video bg-muted rounded-lg overflow-hidden mb-4">
                     {!capturedImage && !cameraActive && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <Camera className="h-12 w-12 text-muted-foreground" />
+                      <div className="absolute inset-0 flex items-center justify-center flex-col">
+                        {cameraError ? (
+                          <>
+                            <CameraOff className="h-12 w-12 text-red-500 mb-2" />
+                            <p className="text-red-500 text-center px-4">{cameraError}</p>
+                          </>
+                        ) : (
+                          <Camera className="h-12 w-12 text-muted-foreground" />
+                        )}
                       </div>
                     )}
                     
@@ -380,7 +380,7 @@ const Scan = () => {
                 
                 <TabsContent value="upload" className="w-full">
                   <div 
-                    className="relative w-full aspect-video bg-muted rounded-lg overflow-hidden mb-4 border-2 border-dashed border-muted-foreground/25 flex flex-col items-center justify-center p-4"
+                    className="relative w-full aspect-video bg-muted rounded-lg overflow-hidden mb-4 border-2 border-dashed border-muted-foreground/25 flex flex-col items-center justify-center p-4 cursor-pointer"
                     onClick={triggerFileInput}
                   >
                     {!previewUrl ? (

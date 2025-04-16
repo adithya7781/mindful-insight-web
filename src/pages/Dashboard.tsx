@@ -1,5 +1,5 @@
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -7,15 +7,193 @@ import { Activity, AlertTriangle, BarChart4, Calendar, Camera, CheckCircle2, Use
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 const Dashboard = () => {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
+  
+  // State for dynamic data instead of static dummy data
+  const [adminStats, setAdminStats] = useState({
+    totalUsers: 0,
+    pendingApprovals: 0,
+    highStressUsers: 0,
+    mediumStressUsers: 0,
+    averageStressLevel: 0,
+  });
+  
+  const [userStats, setUserStats] = useState({
+    stressLevel: 0,
+    lastScan: "",
+    scanCount: 0,
+    highStressIncidents: 0,
+    approved: false,
+  });
+  
+  const [pendingUsers, setPendingUsers] = useState<Array<{
+    id: string;
+    name: string;
+    email: string;
+    registeredAt: string;
+  }>>([]);
+  
+  const [highStressUsers, setHighStressUsers] = useState<Array<{
+    id: string;
+    name: string;
+    stressLevel: number;
+  }>>([]);
 
   useEffect(() => {
     if (!isLoading && !user) {
       navigate("/login");
     }
+    
+    // Set user approval status if user exists
+    if (user) {
+      setUserStats(prev => ({
+        ...prev,
+        approved: user.isApproved
+      }));
+      
+      // If user is approved, fetch their data
+      if (user.isApproved) {
+        fetchUserData();
+      }
+      
+      // If user is admin, fetch admin data
+      if (user.role === 'admin') {
+        fetchAdminData();
+      }
+    }
   }, [user, isLoading, navigate]);
+  
+  const fetchUserData = async () => {
+    if (!user) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      // Fetch user stress results
+      const response = await fetch(`${API_BASE_URL}/api/stress/results`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.results) {
+          // Calculate stats from results
+          const results = data.results;
+          const highStressCount = results.filter((r: any) => r.stressLevel === 'high').length;
+          const latestScan = results.length > 0 ? new Date(results[0].createdAt).toISOString() : '';
+          const latestStressLevel = results.length > 0 ? results[0].score : 0;
+          
+          setUserStats({
+            stressLevel: latestStressLevel,
+            lastScan: latestScan,
+            scanCount: results.length,
+            highStressIncidents: highStressCount,
+            approved: user.isApproved,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+    }
+  };
+  
+  const fetchAdminData = async () => {
+    if (!user || user.role !== 'admin') return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      // Fetch pending users
+      const pendingResponse = await fetch(`${API_BASE_URL}/api/admin/users/pending`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (pendingResponse.ok) {
+        const pendingData = await pendingResponse.json();
+        if (pendingData.success && pendingData.users) {
+          setPendingUsers(pendingData.users);
+        }
+      }
+      
+      // Fetch high stress users
+      const stressResponse = await fetch(`${API_BASE_URL}/api/admin/users/high-stress`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (stressResponse.ok) {
+        const stressData = await stressResponse.json();
+        if (stressData.success && stressData.users) {
+          setHighStressUsers(stressData.users);
+          
+          // Calculate admin stats
+          const totalUsers = stressData.totalUsers || 0;
+          const highStress = stressData.users.length;
+          const mediumStress = stressData.mediumStressUsers || 0;
+          const avgLevel = stressData.averageStressLevel || 0;
+          
+          setAdminStats({
+            totalUsers,
+            pendingApprovals: pendingUsers.length,
+            highStressUsers: highStress,
+            mediumStressUsers: mediumStress,
+            averageStressLevel: avgLevel,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching admin data:", error);
+    }
+  };
+  
+  const approveUser = async (userId: string) => {
+    if (!user || user.role !== 'admin') return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      const response = await fetch(`${API_BASE_URL}/api/admin/users/approve`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ user_id: userId })
+      });
+      
+      if (response.ok) {
+        // Remove approved user from pending list
+        setPendingUsers(prev => prev.filter(u => u.id !== userId));
+        setAdminStats(prev => ({
+          ...prev,
+          pendingApprovals: prev.pendingApprovals - 1,
+          totalUsers: prev.totalUsers + 1
+        }));
+      }
+    } catch (error) {
+      console.error("Error approving user:", error);
+    }
+  };
+  
+  const handleTakeScan = () => {
+    navigate("/dashboard/scan");
+  };
+  
+  const handleViewReports = () => {
+    navigate("/dashboard/results");
+  };
 
   if (isLoading) {
     return (
@@ -30,24 +208,6 @@ const Dashboard = () => {
   }
 
   const isAdmin = user.role === "admin";
-
-  // Example stats for the admin dashboard
-  const adminStats = {
-    totalUsers: 48,
-    pendingApprovals: 3,
-    highStressUsers: 7,
-    mediumStressUsers: 15,
-    averageStressLevel: 42,
-  };
-
-  // Example stats for the user dashboard
-  const userStats = {
-    stressLevel: 38,
-    lastScan: "2023-04-14T15:30:00",
-    scanCount: 12,
-    highStressIncidents: 2,
-    approved: user.isApproved,
-  };
 
   return (
     <DashboardLayout>
@@ -129,44 +289,22 @@ const Dashboard = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {adminStats.pendingApprovals > 0 ? (
+                  {pendingUsers.length > 0 ? (
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-                        <div>
-                          <p className="font-medium">Sarah Johnson</p>
-                          <p className="text-sm text-muted-foreground">
-                            sarah.johnson@company.com
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Registered: 2 hours ago
-                          </p>
+                      {pendingUsers.map(user => (
+                        <div key={user.id} className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                          <div>
+                            <p className="font-medium">{user.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {user.email}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Registered: {new Date(user.registeredAt).toLocaleString()}
+                            </p>
+                          </div>
+                          <Button onClick={() => approveUser(user.id)}>Approve</Button>
                         </div>
-                        <Button>Approve</Button>
-                      </div>
-                      <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-                        <div>
-                          <p className="font-medium">Michael Chen</p>
-                          <p className="text-sm text-muted-foreground">
-                            michael.chen@company.com
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Registered: 5 hours ago
-                          </p>
-                        </div>
-                        <Button>Approve</Button>
-                      </div>
-                      <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-                        <div>
-                          <p className="font-medium">Alex Rodriguez</p>
-                          <p className="text-sm text-muted-foreground">
-                            alex.r@company.com
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Registered: 1 day ago
-                          </p>
-                        </div>
-                        <Button>Approve</Button>
-                      </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center py-8">
@@ -185,44 +323,29 @@ const Dashboard = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-stress-high rounded-full h-3 w-3"></div>
-                        <div>
-                          <p className="font-medium">David Wilson</p>
-                          <p className="text-sm text-muted-foreground">
-                            Stress Level: 87%
-                          </p>
+                  {highStressUsers.length > 0 ? (
+                    <div className="space-y-4">
+                      {highStressUsers.map(user => (
+                        <div key={user.id} className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="bg-stress-high rounded-full h-3 w-3"></div>
+                            <div>
+                              <p className="font-medium">{user.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                Stress Level: {user.stressLevel}%
+                              </p>
+                            </div>
+                          </div>
+                          <Button>Contact</Button>
                         </div>
-                      </div>
-                      <Button>Contact</Button>
+                      ))}
                     </div>
-                    <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-stress-high rounded-full h-3 w-3"></div>
-                        <div>
-                          <p className="font-medium">Emma Thompson</p>
-                          <p className="text-sm text-muted-foreground">
-                            Stress Level: 82%
-                          </p>
-                        </div>
-                      </div>
-                      <Button>Contact</Button>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-8">
+                      <CheckCircle2 className="h-12 w-12 text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">No high stress users</p>
                     </div>
-                    <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-stress-high rounded-full h-3 w-3"></div>
-                        <div>
-                          <p className="font-medium">James Miller</p>
-                          <p className="text-sm text-muted-foreground">
-                            Stress Level: 79%
-                          </p>
-                        </div>
-                      </div>
-                      <Button>Contact</Button>
-                    </div>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -297,7 +420,7 @@ const Dashboard = () => {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold">
-                        {new Date(userStats.lastScan).toLocaleDateString()}
+                        {userStats.lastScan ? new Date(userStats.lastScan).toLocaleDateString() : "No scans yet"}
                       </div>
                     </CardContent>
                   </Card>
@@ -308,15 +431,25 @@ const Dashboard = () => {
                     <CardHeader>
                       <CardTitle>Recent Stress Readings</CardTitle>
                       <CardDescription>
-                        Your stress levels over the past week
+                        Your stress levels over time
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="h-[300px] flex items-center justify-center">
-                        <div className="text-center">
-                          <BarChart4 className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                          <p className="text-muted-foreground">Stress level chart will appear here</p>
-                        </div>
+                        {userStats.scanCount > 0 ? (
+                          <div className="w-full h-full">
+                            {/* Chart would go here with real data in a production app */}
+                            <div className="h-full flex items-center justify-center">
+                              <BarChart4 className="h-16 w-16 text-muted-foreground" />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-center">
+                            <BarChart4 className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                            <p className="text-muted-foreground">No stress readings yet</p>
+                            <p className="text-xs text-muted-foreground mt-2">Take your first scan to see results here</p>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -330,11 +463,11 @@ const Dashboard = () => {
                     </CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-1 gap-4">
-                        <Button className="w-full" size="lg">
+                        <Button className="w-full" size="lg" onClick={handleTakeScan}>
                           <Camera className="mr-2 h-4 w-4" />
                           Take New Scan
                         </Button>
-                        <Button className="w-full" variant="outline" size="lg">
+                        <Button className="w-full" variant="outline" size="lg" onClick={handleViewReports}>
                           <BarChart4 className="mr-2 h-4 w-4" />
                           View Detailed Reports
                         </Button>
