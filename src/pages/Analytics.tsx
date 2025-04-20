@@ -1,38 +1,83 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { AlertCircle, BarChart3, Users } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-
-// Mock data for demonstration
-const mockData = [
-  { name: "Development", lowStress: 4, mediumStress: 2, highStress: 1 },
-  { name: "QA", lowStress: 3, mediumStress: 3, highStress: 2 },
-  { name: "DevOps", lowStress: 2, mediumStress: 1, highStress: 3 },
-  { name: "Design", lowStress: 5, mediumStress: 3, highStress: 0 },
-  { name: "Product", lowStress: 3, mediumStress: 4, highStress: 1 },
-];
-
-const mockEmployeeData = [
-  { id: "1", name: "John Smith", email: "john@company.com", avgStress: 35, department: "Development", highStressRecords: 0 },
-  { id: "2", name: "Emily Johnson", email: "emily@company.com", avgStress: 65, department: "QA", highStressRecords: 2 },
-  { id: "3", name: "Michael Brown", email: "michael@company.com", avgStress: 78, department: "DevOps", highStressRecords: 3 },
-  { id: "4", name: "Sarah Wilson", email: "sarah@company.com", avgStress: 42, department: "Design", highStressRecords: 1 },
-];
+import { toast } from "sonner";
 
 const Analytics = () => {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
+  const [departmentData, setDepartmentData] = useState([]);
+  const [employeeData, setEmployeeData] = useState([]);
+  const [stats, setStats] = useState({
+    totalEmployees: 0,
+    avgStressLevel: 0,
+    highStressCases: 0
+  });
+  const [dataLoading, setDataLoading] = useState(true);
   
   // Redirect non-admin users
-  useState(() => {
+  useEffect(() => {
     if (!isLoading && (!user || user.role !== "admin")) {
       navigate("/dashboard");
     }
-  });
+  }, [user, isLoading, navigate]);
+
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) throw new Error("No authentication token found");
+
+        const response = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/admin/analytics`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          signal: AbortSignal.timeout(3000),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Server responded with status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (data.success) {
+          setDepartmentData(data.departmentData || []);
+          setEmployeeData(data.employeeData || []);
+          setStats(data.stats || {
+            totalEmployees: 0,
+            avgStressLevel: 0,
+            highStressCases: 0
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching analytics:", err);
+        toast.error("Failed to load analytics", {
+          description: "Please try again later or contact support."
+        });
+      } finally {
+        setDataLoading(false);
+      }
+    };
+
+    if (user?.role === "admin") {
+      fetchAnalytics();
+    }
+  }, [user]);
+
+  if (isLoading || dataLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-screen">
+          <p>Loading analytics...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -50,8 +95,8 @@ const Analytics = () => {
               <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">42</div>
-              <p className="text-xs text-muted-foreground">+5 from last month</p>
+              <div className="text-2xl font-bold">{stats.totalEmployees}</div>
+              <p className="text-xs text-muted-foreground">Active employees</p>
             </CardContent>
           </Card>
           
@@ -60,8 +105,8 @@ const Analytics = () => {
               <CardTitle className="text-sm font-medium">Avg. Stress Level</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">48%</div>
-              <p className="text-xs text-muted-foreground">-3% from last month</p>
+              <div className="text-2xl font-bold">{stats.avgStressLevel}%</div>
+              <p className="text-xs text-muted-foreground">Company-wide average</p>
             </CardContent>
           </Card>
           
@@ -70,8 +115,8 @@ const Analytics = () => {
               <CardTitle className="text-sm font-medium">High Stress Cases</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">7</div>
-              <p className="text-xs text-muted-foreground">+2 from last month</p>
+              <div className="text-2xl font-bold">{stats.highStressCases}</div>
+              <p className="text-xs text-muted-foreground">Requires attention</p>
             </CardContent>
           </Card>
         </div>
@@ -85,25 +130,34 @@ const Analytics = () => {
           </CardHeader>
           <CardContent>
             <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={mockData}
-                  margin={{
-                    top: 20,
-                    right: 30,
-                    left: 20,
-                    bottom: 5,
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="lowStress" stackId="a" name="Low Stress" fill="#10b981" />
-                  <Bar dataKey="mediumStress" stackId="a" name="Medium Stress" fill="#f59e0b" />
-                  <Bar dataKey="highStress" stackId="a" name="High Stress" fill="#ef4444" />
-                </BarChart>
-              </ResponsiveContainer>
+              {departmentData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={departmentData}
+                    margin={{
+                      top: 20,
+                      right: 30,
+                      left: 20,
+                      bottom: 5,
+                    }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="lowStress" stackId="a" name="Low Stress" fill="#10b981" />
+                    <Bar dataKey="mediumStress" stackId="a" name="Medium Stress" fill="#f59e0b" />
+                    <Bar dataKey="highStress" stackId="a" name="High Stress" fill="#ef4444" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center">
+                  <div className="text-center">
+                    <BarChart3 className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">No department data available</p>
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -117,9 +171,8 @@ const Analytics = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {mockEmployeeData
-                .filter(emp => emp.avgStress > 65)
-                .map((employee) => (
+              {employeeData.length > 0 ? (
+                employeeData.map((employee) => (
                   <div key={employee.id} className="flex items-start gap-4 p-4 border rounded-lg">
                     <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100">
                       <AlertCircle className="h-6 w-6 text-red-500" />
@@ -143,7 +196,13 @@ const Analytics = () => {
                       </p>
                     </div>
                   </div>
-                ))}
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <AlertCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">No high stress cases found</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

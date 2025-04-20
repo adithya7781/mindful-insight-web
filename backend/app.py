@@ -1,4 +1,3 @@
-
 from flask import Flask, request, jsonify, abort
 from flask_cors import CORS
 import numpy as np
@@ -235,6 +234,22 @@ def get_high_stress_users(current_user_id):
     return jsonify({
         'success': True,
         'users': users
+    })
+
+@app.route('/api/admin/analytics', methods=['GET'])
+@token_required
+@admin_required
+def get_analytics(current_user_id):
+    """Get analytics data for admin dashboard"""
+    stats = api.get_analytics_stats()
+    department_data = api.get_department_stress_data()
+    employee_data = api.get_employee_stress_data()
+    
+    return jsonify({
+        'success': True,
+        'stats': stats,
+        'departmentData': department_data,
+        'employeeData': employee_data
     })
 
 # Cleanup function for when the application exits

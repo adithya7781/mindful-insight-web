@@ -6,15 +6,29 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Activity, AlertTriangle, BarChart4, Calendar, Camera, CheckCircle2, Users } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+interface AdminStats {
+  totalUsers: number;
+  pendingApprovals: number;
+  highStressUsers: number;
+  mediumStressUsers: number;
+  averageStressLevel: number;
+}
+
+interface UserStats {
+  stressLevel: number;
+  lastScan: string;
+  scanCount: number;
+  highStressIncidents: number;
+  approved: boolean;
+}
 
 const Dashboard = () => {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
   
-  // State for dynamic data instead of static dummy data
-  const [adminStats, setAdminStats] = useState({
+  const [adminStats, setAdminStats] = useState<AdminStats>({
     totalUsers: 0,
     pendingApprovals: 0,
     highStressUsers: 0,
@@ -22,7 +36,7 @@ const Dashboard = () => {
     averageStressLevel: 0,
   });
   
-  const [userStats, setUserStats] = useState({
+  const [userStats, setUserStats] = useState<UserStats>({
     stressLevel: 0,
     lastScan: "",
     scanCount: 0,
@@ -74,20 +88,19 @@ const Dashboard = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
       
-      // Fetch user stress results
-      const response = await fetch(`${API_BASE_URL}/api/stress/results`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/stress/results`, {
         headers: {
           'Authorization': `Bearer ${token}`
-        }
+        },
+        signal: AbortSignal.timeout(3000),
       });
       
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.results) {
-          // Calculate stats from results
           const results = data.results;
           const highStressCount = results.filter((r: any) => r.stressLevel === 'high').length;
-          const latestScan = results.length > 0 ? new Date(results[0].createdAt).toISOString() : '';
+          const latestScan = results.length > 0 ? results[0].createdAt : '';
           const latestStressLevel = results.length > 0 ? results[0].score : 0;
           
           setUserStats({
@@ -101,6 +114,7 @@ const Dashboard = () => {
       }
     } catch (error) {
       console.error("Error fetching user data:", error);
+      toast.error("Failed to load user data");
     }
   };
   
@@ -112,10 +126,11 @@ const Dashboard = () => {
       if (!token) return;
       
       // Fetch pending users
-      const pendingResponse = await fetch(`${API_BASE_URL}/api/admin/users/pending`, {
+      const pendingResponse = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/admin/users/pending`, {
         headers: {
           'Authorization': `Bearer ${token}`
-        }
+        },
+        signal: AbortSignal.timeout(3000),
       });
       
       if (pendingResponse.ok) {
@@ -125,35 +140,30 @@ const Dashboard = () => {
         }
       }
       
-      // Fetch high stress users
-      const stressResponse = await fetch(`${API_BASE_URL}/api/admin/users/high-stress`, {
+      // Fetch high stress users and admin stats
+      const statsResponse = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/admin/users/high-stress`, {
         headers: {
           'Authorization': `Bearer ${token}`
-        }
+        },
+        signal: AbortSignal.timeout(3000),
       });
       
-      if (stressResponse.ok) {
-        const stressData = await stressResponse.json();
-        if (stressData.success && stressData.users) {
-          setHighStressUsers(stressData.users);
-          
-          // Calculate admin stats
-          const totalUsers = stressData.totalUsers || 0;
-          const highStress = stressData.users.length;
-          const mediumStress = stressData.mediumStressUsers || 0;
-          const avgLevel = stressData.averageStressLevel || 0;
-          
+      if (statsResponse.ok) {
+        const statsData = await statsResponse.json();
+        if (statsData.success) {
+          setHighStressUsers(statsData.users);
           setAdminStats({
-            totalUsers,
+            totalUsers: statsData.totalUsers || 0,
             pendingApprovals: pendingUsers.length,
-            highStressUsers: highStress,
-            mediumStressUsers: mediumStress,
-            averageStressLevel: avgLevel,
+            highStressUsers: statsData.users.length,
+            mediumStressUsers: statsData.mediumStressUsers || 0,
+            averageStressLevel: statsData.averageStressLevel || 0,
           });
         }
       }
     } catch (error) {
       console.error("Error fetching admin data:", error);
+      toast.error("Failed to load admin data");
     }
   };
   
