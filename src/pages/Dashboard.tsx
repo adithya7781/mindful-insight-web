@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -62,19 +61,16 @@ const Dashboard = () => {
       navigate("/login");
     }
     
-    // Set user approval status if user exists
     if (user) {
       setUserStats(prev => ({
         ...prev,
         approved: user.isApproved
       }));
       
-      // If user is approved, fetch their data
       if (user.isApproved) {
         fetchUserData();
       }
       
-      // If user is admin, fetch admin data
       if (user.role === 'admin') {
         fetchAdminData();
       }
@@ -125,7 +121,6 @@ const Dashboard = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
       
-      // Fetch pending users
       const pendingResponse = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/admin/users/pending`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -140,7 +135,6 @@ const Dashboard = () => {
         }
       }
       
-      // Fetch high stress users and admin stats
       const statsResponse = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/admin/users/high-stress`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -174,7 +168,7 @@ const Dashboard = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
       
-      const response = await fetch(`${API_BASE_URL}/api/admin/users/approve`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/admin/users/approve`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -184,7 +178,6 @@ const Dashboard = () => {
       });
       
       if (response.ok) {
-        // Remove approved user from pending list
         setPendingUsers(prev => prev.filter(u => u.id !== userId));
         setAdminStats(prev => ({
           ...prev,
@@ -448,7 +441,6 @@ const Dashboard = () => {
                       <div className="h-[300px] flex items-center justify-center">
                         {userStats.scanCount > 0 ? (
                           <div className="w-full h-full">
-                            {/* Chart would go here with real data in a production app */}
                             <div className="h-full flex items-center justify-center">
                               <BarChart4 className="h-16 w-16 text-muted-foreground" />
                             </div>
