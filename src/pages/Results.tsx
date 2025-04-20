@@ -1,43 +1,53 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AlertCircle, BarChart3, Calendar, Check, XCircle } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { toast } from "sonner";
 import { StressResult } from "@/types";
-
-// Mock data for demonstration purposes
-const mockResults: StressResult[] = [
-  {
-    id: "1",
-    userId: "user1",
-    stressLevel: "low",
-    score: 25,
-    createdAt: new Date(Date.now() - 86400000 * 1), // 1 day ago
-    notes: "Feeling relaxed after weekend"
-  },
-  {
-    id: "2",
-    userId: "user1",
-    stressLevel: "medium",
-    score: 60,
-    createdAt: new Date(Date.now() - 86400000 * 3), // 3 days ago
-    notes: "Project deadline approaching"
-  },
-  {
-    id: "3",
-    userId: "user1",
-    stressLevel: "high",
-    score: 85,
-    createdAt: new Date(Date.now() - 86400000 * 5), // 5 days ago
-    notes: "Critical issue with production server"
-  }
-];
 
 const Results = () => {
   const { user } = useAuth();
-  const [results] = useState<StressResult[]>(mockResults);
+  const [results, setResults] = useState<StressResult[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
+  useEffect(() => {
+    const fetchResults = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          throw new Error("No authentication token found");
+        }
+        
+        const response = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/stress/results`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          signal: AbortSignal.timeout(3000), // 3 second timeout
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Server responded with status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        setResults(data.results || []);
+      } catch (err) {
+        console.error("Error fetching results:", err);
+        // Using empty array for results when API fails
+        setResults([]);
+        toast.info("No results available", {
+          description: "Connect to the backend to view your stress analysis history.",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchResults();
+  }, []);
+
   const getStressIcon = (level: "low" | "medium" | "high") => {
     switch (level) {
       case "low":
@@ -60,6 +70,11 @@ const Results = () => {
     }
   };
 
+  const calculateAverageScore = () => {
+    if (results.length === 0) return 0;
+    return Math.round(results.reduce((acc, result) => acc + result.score, 0) / results.length);
+  };
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
@@ -76,9 +91,7 @@ const Results = () => {
               <CardTitle className="text-sm font-medium">Average Stress</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{
-                Math.round(results.reduce((acc, result) => acc + result.score, 0) / results.length)
-              }%</div>
+              <div className="text-2xl font-bold">{calculateAverageScore()}%</div>
               <p className="text-xs text-muted-foreground">Over the last {results.length} scans</p>
             </CardContent>
           </Card>
