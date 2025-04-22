@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/use-toast";
-import { Info } from "lucide-react";
 
 const LoginForm = () => {
   const [email, setEmail] = useState("");
@@ -61,14 +60,6 @@ const LoginForm = () => {
           )}
           
           <div className="grid gap-4">
-            <Alert className="mb-4 bg-muted/50">
-              <Info className="h-4 w-4" />
-              <AlertDescription>
-                Try demo login: <span className="font-medium">demo@example.com</span> / <span className="font-medium">demo123</span><br/>
-                Admin login: <span className="font-medium">admin@example.com</span> / <span className="font-medium">admin123</span>
-              </AlertDescription>
-            </Alert>
-            
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
               <Input

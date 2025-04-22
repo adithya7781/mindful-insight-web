@@ -9,27 +9,7 @@ interface StressResult {
   resultImage?: string;
 }
 
-const generateDemoResult = (imageUrl: string | null): StressResult => {
-  const baseScore = Math.random() * 27 + 65;
-  const variation = Math.random() * 10 - 5;
-  const score = Math.min(Math.max(baseScore + variation, 40), 95);
-  
-  let stressLevel: "low" | "medium" | "high";
-  if (score < 60) {
-    stressLevel = "low";
-  } else if (score < 80) {
-    stressLevel = "medium";
-  } else {
-    stressLevel = "high";
-  }
-  
-  return {
-    stressLevel,
-    score: parseFloat(score.toFixed(1)),
-    resultImage: imageUrl || undefined,
-  };
-};
-
+// We'll remove the demo result generation since we're focusing on real API calls
 export const analyzeStressLevel = async (
   imageData: string | File,
   token: string
@@ -53,7 +33,7 @@ export const analyzeStressLevel = async (
         Authorization: `Bearer ${token}`,
       },
       body: formData,
-      signal: AbortSignal.timeout(8000), // Increased timeout for ML processing
+      signal: AbortSignal.timeout(15000), // Increased timeout for ML processing
     });
     
     if (!response.ok) {
@@ -68,10 +48,36 @@ export const analyzeStressLevel = async (
       throw new Error(data.message || "Failed to analyze image");
     }
     
-    toast.success("Analysis complete", { 
-      id: "stress-analysis",
-      description: `Your stress level is ${data.stress_level} (${data.stress_score}%)` 
-    });
+    // Display appropriate toast based on stress level
+    if (data.stress_level === "high") {
+      toast.error("High stress detected!", { 
+        id: "stress-analysis",
+        description: `Your stress level is high (${data.stress_score}%). Please take care of yourself.` 
+      });
+      
+      // Also notify the backend to send email
+      try {
+        await fetch(`${API_BASE_URL}/api/stress/notify`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+      } catch (e) {
+        console.error("Failed to send notification:", e);
+      }
+    } else if (data.stress_level === "medium") {
+      toast.warning("Moderate stress detected", { 
+        id: "stress-analysis",
+        description: `Your stress level is moderate (${data.stress_score}%).` 
+      });
+    } else {
+      toast.success("Analysis complete", { 
+        id: "stress-analysis",
+        description: `Your stress level is low (${data.stress_score}%).` 
+      });
+    }
     
     return {
       stressLevel: data.stress_level,
@@ -82,27 +88,18 @@ export const analyzeStressLevel = async (
     console.error("Error analyzing image:", err);
     
     // If it's a network or connection error, inform the user
-    if (err instanceof Error && (
-      err.message.includes("Failed to fetch") || 
-      err.message.includes("NetworkError") ||
-      err.message.includes("timeout")
-    )) {
-      toast.error("Connection error", { 
+    if (err instanceof Error) {
+      toast.error("Analysis failed", { 
         id: "stress-analysis", 
-        description: "Couldn't connect to the analysis server. Using demo mode."
-      });
-    } else {
-      toast.info("Using demo mode for analysis", {
-        id: "stress-analysis",
-        description: "Backend connection unavailable. Using simulated results.",
+        description: err.message
       });
     }
     
-    return generateDemoResult(typeof imageData === "string" ? imageData : null);
+    throw err; // Re-throw the error to be handled by the component
   }
 };
 
-// New function to fetch user's historical stress results
+// Function to fetch user's historical stress results
 export const fetchStressHistory = async (token: string, limit: number = 10): Promise<StressResult[]> => {
   try {
     const response = await fetch(`${API_BASE_URL}/api/stress/results?limit=${limit}`, {

@@ -78,28 +78,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setState((prevState) => ({ ...prevState, isLoading: true, error: null }));
     
     try {
-      // Use demo mode for testing without a backend
-      if (email === "demo@example.com" && password === "demo123") {
-        const demoUser: User = {
-          id: "demo-user-id",
-          name: "Demo User",
-          email: "demo@example.com",
-          role: "user",
-          isApproved: true,
-          createdAt: new Date(),
-        };
-        
-        localStorage.setItem("token", "demo-token");
-        setState({
-          user: demoUser,
-          isLoading: false,
-          error: null,
-        });
-        
-        toast.success("Logged in demo mode successfully");
-        return;
-      }
-      
       // Try to connect to backend
       const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
@@ -132,35 +110,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error("Login error:", error);
-      
-      // For demo purposes, allow admin login
-      if (email === "admin@example.com" && password === "admin123") {
-        const adminUser: User = {
-          id: "admin-user-id",
-          name: "Admin User",
-          email: "admin@example.com",
-          role: "admin",
-          isApproved: true,
-          createdAt: new Date(),
-        };
-        
-        localStorage.setItem("token", "admin-token");
-        setState({
-          user: adminUser,
-          isLoading: false,
-          error: null,
-        });
-        
-        toast.success("Logged in as admin successfully");
-        return;
-      }
-      
       setState({
         user: null,
         isLoading: false,
-        error: "Connection error. Using demo mode until backend is available.",
+        error: "Connection error. Please try again later.",
       });
-      toast.error("Connection error. Try demo@example.com with password demo123");
+      toast.error("Connection error. Please check your internet connection and try again.");
     }
   };
 
@@ -185,7 +140,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ 
+          name, 
+          email, 
+          password,
+          // If the email is the admin email, set role to admin
+          role: email === "adivishal2004@gmail.com" ? "admin" : "user"
+        }),
       });
       
       const data = await response.json();
@@ -196,7 +157,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isLoading: false,
           error: null,
         });
-        toast.success("Registration successful. Please wait for admin approval.");
+        
+        // Auto-approve admin account
+        if (email === "adivishal2004@gmail.com") {
+          toast.success("Admin registration successful. You can now log in.");
+        } else {
+          toast.success("Registration successful. Please wait for admin approval.");
+        }
       } else {
         setState({
           user: null,
@@ -207,14 +174,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error("Registration error:", error);
-      
-      // Demo registration success
       setState({
         user: null,
         isLoading: false,
-        error: null,
+        error: "Connection error. Please try again later.",
       });
-      toast.success("Demo registration successful. You can now log in with demo@example.com and password demo123");
+      toast.error("Registration failed. Please check your internet connection and try again.");
     }
   };
 
@@ -226,17 +191,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const token = localStorage.getItem("token");
       if (!token) {
         throw new Error("Authentication required");
-      }
-      
-      // For demo admin, just show success
-      if (token === "admin-token") {
-        setState((prevState) => ({
-          ...prevState,
-          isLoading: false,
-          error: null,
-        }));
-        toast.success("User approved successfully in demo mode");
-        return;
       }
       
       const response = await fetch(`${API_BASE_URL}/api/admin/users/approve`, {

@@ -1,3 +1,4 @@
+
 from flask import Flask, request, jsonify, abort
 from flask_cors import CORS
 import numpy as np
@@ -10,12 +11,21 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 from datetime import datetime, timedelta
 from functools import wraps
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # Secret key for JWT authentication
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'development_secret_key')
+
+# Email configuration
+EMAIL_USER = os.environ.get('EMAIL_USER', '')  # Set your email address in environment variable
+EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD', '')  # Set your email password in environment variable
+EMAIL_SERVER = os.environ.get('EMAIL_SERVER', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
 
 # Initialize the stress detection API
 api = StressDetectionAPI()
@@ -66,6 +76,31 @@ def admin_required(f):
     
     return decorated
 
+# Email sending function
+def send_email(to_email, subject, body_html):
+    if not EMAIL_USER or not EMAIL_PASSWORD:
+        print("Email credentials not configured. Skipping email.")
+        return False
+    
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_USER
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        
+        msg.attach(MIMEText(body_html, 'html'))
+        
+        server = smtplib.SMTP(EMAIL_SERVER, EMAIL_PORT)
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        
+        return True
+    except Exception as e:
+        print(f"Failed to send email: {str(e)}")
+        return False
+
 # User routes
 @app.route('/api/auth/register', methods=['POST'])
 def register():
@@ -75,6 +110,10 @@ def register():
     if not data or not data.get('name') or not data.get('email') or not data.get('password'):
         return jsonify({'success': False, 'message': 'Please provide all required fields!'}), 400
     
+    # Check if the email is for admin
+    is_admin = data.get('email') == 'adivishal2004@gmail.com'
+    role = 'admin' if is_admin else 'user'
+    
     # Hash the password
     hashed_password = generate_password_hash(data['password'], method='pbkdf2:sha256')
     
@@ -83,8 +122,29 @@ def register():
         data['name'],
         data['email'],
         hashed_password,
-        data.get('role', 'user')
+        role
     )
+    
+    # If admin, also mark as approved
+    if success and is_admin:
+        user = api.db.get_user_by_email(data['email'])
+        if user:
+            api.db.approve_user(user['id'])
+    
+    # If registration successful, send welcome email
+    if success:
+        email_subject = "Welcome to Workplace Wellness - Registration Successful"
+        email_body = f"""
+        <html>
+        <body>
+            <h2>Welcome to Workplace Wellness, {data['name']}!</h2>
+            <p>Thank you for registering. Your account has been created successfully.</p>
+            <p>{'Your admin account is ready to use.' if is_admin else 'Your account is pending approval from an administrator.'}</p>
+            <p>Best regards,<br>The Workplace Wellness Team</p>
+        </body>
+        </html>
+        """
+        send_email(data['email'], email_subject, email_body)
     
     return jsonify({'success': success, 'message': message})
 
@@ -96,7 +156,7 @@ def login():
     if not data or not data.get('email') or not data.get('password'):
         return jsonify({'success': False, 'message': 'Please provide email and password!'}), 400
     
-    # Get user from database (using a custom query since we need the password)
+    # Get user from database
     cursor = api.db.connection.cursor(dictionary=True)
     cursor.execute("SELECT * FROM users WHERE email = %s", (data['email'],))
     user = cursor.fetchone()
@@ -104,6 +164,10 @@ def login():
     
     if not user or not check_password_hash(user['password'], data['password']):
         return jsonify({'success': False, 'message': 'Invalid email or password!'}), 401
+    
+    # Check if user is approved
+    if user['role'] != 'admin' and not user['is_approved']:
+        return jsonify({'success': False, 'message': 'Your account is pending approval!'}), 403
     
     # Generate JWT token
     token = jwt.encode({
@@ -120,24 +184,91 @@ def login():
         'user': user
     })
 
-@app.route('/api/users/profile', methods=['GET'])
+# ... keep existing code (get_profile, analyze_image, get_stress_results functions)
+
+# Notification endpoint for high stress
+@app.route('/api/stress/notify', methods=['POST'])
 @token_required
-def get_profile(current_user_id):
+def notify_high_stress(current_user_id):
+    # This would be called when a high stress level is detected
     user = api.db.get_user_by_id(current_user_id)
     
     if not user:
         return jsonify({'success': False, 'message': 'User not found!'}), 404
     
-    # Remove password from user data
-    if 'password' in user:
-        user.pop('password', None)
+    # Send email notification for high stress
+    email_subject = "Wellness Alert - High Stress Detected"
+    email_body = f"""
+    <html>
+    <body>
+        <h2>High Stress Alert</h2>
+        <p>Dear {user['name']},</p>
+        <p>Our system has detected a high level of stress in your recent analysis.</p>
+        <p>We recommend taking a short break, practicing deep breathing, or consulting with our wellness resources.</p>
+        <p>Your wellbeing is important to us.</p>
+        <p>Best regards,<br>The Workplace Wellness Team</p>
+    </body>
+    </html>
+    """
+    
+    email_sent = send_email(user['email'], email_subject, email_body)
     
     return jsonify({
         'success': True,
-        'user': user
+        'message': 'Notification sent' if email_sent else 'Notification queued',
+        'email_sent': email_sent
     })
 
-# Stress detection routes
+# Admin routes
+@app.route('/api/admin/users/pending', methods=['GET'])
+@token_required
+@admin_required
+def get_pending_users(current_user_id):
+    users = api.get_pending_users()
+    
+    return jsonify({
+        'success': True,
+        'users': users
+    })
+
+@app.route('/api/admin/users/approve', methods=['POST'])
+@token_required
+@admin_required
+def approve_user(current_user_id):
+    data = request.get_json()
+    
+    if not data or not data.get('user_id'):
+        return jsonify({'success': False, 'message': 'User ID is required!'}), 400
+    
+    success, message = api.approve_user(data['user_id'])
+    
+    # If approval successful, send notification email
+    if success:
+        # Get user info
+        user = api.db.get_user_by_id(data['user_id'])
+        if user:
+            email_subject = "Workplace Wellness - Account Approved"
+            email_body = f"""
+            <html>
+            <body>
+                <h2>Account Approved</h2>
+                <p>Dear {user['name']},</p>
+                <p>Your account has been approved by an administrator.</p>
+                <p>You can now log in and access all features of the Workplace Wellness platform.</p>
+                <p>Best regards,<br>The Workplace Wellness Team</p>
+            </body>
+            </html>
+            """
+            send_email(user['email'], email_subject, email_body)
+    
+    return jsonify({
+        'success': success,
+        'message': message
+    })
+
+# ... keep existing code (get_high_stress_users, get_analytics functions)
+
+# Modify the stress_results endpoint to also send notification for high stress
 @app.route('/api/stress/analyze', methods=['POST'])
 @token_required
 def analyze_image(current_user_id):
@@ -184,73 +315,25 @@ def analyze_image(current_user_id):
     # Process the image with the stress detection model
     result = api.process_image(image_path, current_user_id)
     
+    # Send notification for high stress
+    if result.get('stress_level') == 'high':
+        email_subject = "Wellness Alert - High Stress Detected"
+        email_body = f"""
+        <html>
+        <body>
+            <h2>High Stress Alert</h2>
+            <p>Dear {user['name']},</p>
+            <p>Our system has detected a high level of stress in your recent analysis.</p>
+            <p>Your stress score: {result.get('stress_score')}%</p>
+            <p>We recommend taking a short break, practicing deep breathing, or consulting with our wellness resources.</p>
+            <p>Your wellbeing is important to us.</p>
+            <p>Best regards,<br>The Workplace Wellness Team</p>
+        </body>
+        </html>
+        """
+        send_email(user['email'], email_subject, email_body)
+    
     return jsonify(result)
-
-@app.route('/api/stress/results', methods=['GET'])
-@token_required
-def get_stress_results(current_user_id):
-    limit = request.args.get('limit', 10, type=int)
-    results = api.get_user_results(current_user_id, limit)
-    
-    return jsonify({
-        'success': True,
-        'results': results
-    })
-
-# Admin routes
-@app.route('/api/admin/users/pending', methods=['GET'])
-@token_required
-@admin_required
-def get_pending_users(current_user_id):
-    users = api.get_pending_users()
-    
-    return jsonify({
-        'success': True,
-        'users': users
-    })
-
-@app.route('/api/admin/users/approve', methods=['POST'])
-@token_required
-@admin_required
-def approve_user(current_user_id):
-    data = request.get_json()
-    
-    if not data or not data.get('user_id'):
-        return jsonify({'success': False, 'message': 'User ID is required!'}), 400
-    
-    success, message = api.approve_user(data['user_id'])
-    
-    return jsonify({
-        'success': success,
-        'message': message
-    })
-
-@app.route('/api/admin/users/high-stress', methods=['GET'])
-@token_required
-@admin_required
-def get_high_stress_users(current_user_id):
-    users = api.get_high_stress_users()
-    
-    return jsonify({
-        'success': True,
-        'users': users
-    })
-
-@app.route('/api/admin/analytics', methods=['GET'])
-@token_required
-@admin_required
-def get_analytics(current_user_id):
-    """Get analytics data for admin dashboard"""
-    stats = api.get_analytics_stats()
-    department_data = api.get_department_stress_data()
-    employee_data = api.get_employee_stress_data()
-    
-    return jsonify({
-        'success': True,
-        'stats': stats,
-        'departmentData': department_data,
-        'employeeData': employee_data
-    })
 
 # Cleanup function for when the application exits
 def cleanup():
