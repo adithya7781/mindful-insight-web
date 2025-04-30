@@ -60,6 +60,7 @@ export const CameraTab = ({
         )}
       </div>
       
+      {/* Only show controls when NO image has been captured */}
       {!capturedImage && (
         <div className="flex justify-center">
           {!cameraActive ? (
@@ -87,4 +88,3 @@ export const CameraTab = ({
     </div>
   );
 };
-

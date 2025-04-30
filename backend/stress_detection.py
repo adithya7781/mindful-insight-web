@@ -72,39 +72,58 @@ class StressDetectionAPI:
     def process_image(self, image_path, user_id):
         """Process image and determine stress level"""
         try:
+            print(f"Processing image for user {user_id}")
             # Handle different image input types
             if isinstance(image_path, str):
                 if os.path.isfile(image_path):
                     # Regular file path
+                    print(f"Loading image from file: {image_path}")
                     image = cv2.imread(image_path)
                 elif image_path.startswith('data:image'):
                     # Base64 encoded image data
+                    print("Processing base64 image data")
                     base64_data = image_path.split(',')[1] if ',' in image_path else image_path
                     image_bytes = base64.b64decode(base64_data)
                     nparr = np.frombuffer(image_bytes, np.uint8)
                     image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                    print("Base64 image decoded successfully")
                 else:
                     return {"success": False, "message": "Invalid image format"}
             else:
                 return {"success": False, "message": "Invalid image path"}
             
             if image is None:
+                print("Failed to load image")
                 return {"success": False, "message": "Failed to load image"}
             
             # Convert to grayscale for face detection
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             
-            # Detect faces
-            faces = self.face_cascade.detectMultiScale(
-                gray,
-                scaleFactor=1.1,
-                minNeighbors=5,
-                minSize=(30, 30)
-            )
+            # Detect faces using multiple scale factors for better accuracy
+            faces = []
+            scale_factors = [1.05, 1.1, 1.2]  # Try different scale factors
+            min_neighbors_options = [3, 5]     # Try different min_neighbors
+            
+            for scale in scale_factors:
+                for min_neighbors in min_neighbors_options:
+                    detected = self.face_cascade.detectMultiScale(
+                        gray,
+                        scaleFactor=scale,
+                        minNeighbors=min_neighbors,
+                        minSize=(30, 30)
+                    )
+                    if len(detected) > 0:
+                        faces = detected
+                        print(f"Face detected using scale={scale}, min_neighbors={min_neighbors}")
+                        break
+                if len(faces) > 0:
+                    break
             
             if len(faces) == 0:
-                return {"success": False, "message": "No face detected in the image"}
+                print("No face detected in the image")
+                return {"success": False, "message": "No face detected in the image. Please try a clearer photo with a visible face."}
             
+            print(f"Number of faces detected: {len(faces)}")
             # For the first detected face
             (x, y, w, h) = faces[0]
             
@@ -114,7 +133,7 @@ class StressDetectionAPI:
             # Preprocess face (resize to 48x48 for model input)
             face_roi = cv2.resize(face_roi, (48, 48))
             
-            # Get user info to tailor the stress level appropriately
+            # Get user info
             user = self.db.get_user_by_id(user_id)
             
             if not user:
@@ -129,9 +148,11 @@ class StressDetectionAPI:
             if hasattr(self.model, 'predict'):
                 try:
                     # Attempt to use the trained model
-                    stress_prediction = float(self.model.predict(normalized_face)[0][0])
+                    print("Running stress prediction with model")
+                    stress_prediction = float(self.model.predict(normalized_face, verbose=0)[0][0])
                     # Scale to 0-100 range
                     stress_score = stress_prediction * 100
+                    print(f"Predicted stress score: {stress_score:.1f}%")
                 except Exception as e:
                     print(f"Model prediction failed: {e}, using fallback.")
                     # Fallback to demo mode if model fails
@@ -151,6 +172,8 @@ class StressDetectionAPI:
                 stress_level = "medium"
             else:
                 stress_level = "high"
+            
+            print(f"Stress level determined: {stress_level} ({stress_score:.1f}%)")
             
             # Draw rectangle on image based on stress level
             if stress_level == "low":
@@ -199,43 +222,5 @@ class StressDetectionAPI:
             print(traceback.format_exc())
             return {"success": False, "message": f"Error processing image: {str(e)}"}
     
-    def get_user_results(self, user_id, limit=10):
-        """Get stress results for a user"""
-        results = self.db.get_stress_results(user_id, limit)
-        return results
-    
-    def get_pending_users(self):
-        """Get users pending approval"""
-        return self.db.get_pending_users()
-    
-    def approve_user(self, user_id):
-        """Approve a user"""
-        return self.db.approve_user(user_id)
-    
-    def get_high_stress_users(self):
-        """Get users with high stress levels"""
-        return self.db.get_high_stress_users()
-    
-    def get_analytics_stats(self):
-        """Get general analytics stats"""
-        return self.db.get_analytics_stats()
-    
-    def get_department_stress_data(self):
-        """Get stress data by department"""
-        return self.db.get_department_stress_data()
-    
-    def get_employee_stress_data(self):
-        """Get stress data for employees"""
-        return self.db.get_employee_stress_data()
-    
-    def train_model(self, training_data=None):
-        """Train the stress detection model with provided or default data"""
-        # This would be where you'd implement actual model training
-        # with a proper dataset of facial images labeled with stress levels
-        
-        # For now, we'll just save our initial model
-        if hasattr(self.model, 'save'):
-            self.model.save(self.model_path)
-            return {"success": True, "message": "Model saved successfully"}
-        
-        return {"success": False, "message": "Model training not implemented"}
+    # ... keep existing code (get_user_results, get_pending_users, etc. methods)
+

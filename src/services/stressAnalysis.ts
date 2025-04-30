@@ -9,7 +9,6 @@ interface StressResult {
   resultImage?: string;
 }
 
-// We'll remove the demo result generation since we're focusing on real API calls
 export const analyzeStressLevel = async (
   imageData: string | File,
   token: string
@@ -18,23 +17,28 @@ export const analyzeStressLevel = async (
   
   if (typeof imageData === "string") {
     // Handle base64 image data from webcam
+    console.log("Processing base64 image from camera");
     formData.append("image_data", imageData);
   } else {
     // Handle file upload
+    console.log("Processing uploaded file:", imageData.name, imageData.type);
     formData.append("image", imageData);
   }
   
   try {
     toast.loading("Analyzing stress levels...", { id: "stress-analysis" });
     
+    console.log("Sending request to API...");
     const response = await fetch(`${API_BASE_URL}/api/stress/analyze`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
       },
       body: formData,
-      signal: AbortSignal.timeout(15000), // Increased timeout for ML processing
+      signal: AbortSignal.timeout(30000), // Increased timeout for ML processing
     });
+    
+    console.log("Response status:", response.status);
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -43,6 +47,7 @@ export const analyzeStressLevel = async (
     }
     
     const data = await response.json();
+    console.log("Analysis result:", data);
     
     if (!data.success) {
       throw new Error(data.message || "Failed to analyze image");

@@ -43,6 +43,7 @@ export const UploadTab = ({ previewUrl, onFileChange, onTriggerFileInput }: Uplo
         />
       </div>
       
+      {/* Only show upload button when NO image has been uploaded */}
       {!previewUrl && (
         <div className="flex justify-center">
           <Button onClick={onTriggerFileInput}>
@@ -54,4 +55,3 @@ export const UploadTab = ({ previewUrl, onFileChange, onTriggerFileInput }: Uplo
     </div>
   );
 };
-

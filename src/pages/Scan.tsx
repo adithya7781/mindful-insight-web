@@ -78,7 +78,7 @@ const Scan = () => {
         context.drawImage(videoRef.current, 0, 0, videoWidth, videoHeight);
         
         try {
-          const imageDataUrl = canvasRef.current.toDataURL("image/jpeg", 0.8);
+          const imageDataUrl = canvasRef.current.toDataURL("image/jpeg", 0.9); // Increased quality
           setCapturedImage(imageDataUrl);
           stopCamera();
         } catch (err) {
@@ -119,8 +119,10 @@ const Scan = () => {
     
     if (activeTab === "camera" && capturedImage) {
       imageToAnalyze = capturedImage;
+      console.log("Analyzing captured image from camera");
     } else if (activeTab === "upload" && uploadedImage) {
       imageToAnalyze = uploadedImage;
+      console.log("Analyzing uploaded image file");
     } else {
       setError("No image available for analysis.");
       return;
@@ -140,7 +142,9 @@ const Scan = () => {
         return;
       }
       
+      console.log("Starting stress analysis with token");
       const analysisResult = await analyzeStressLevel(imageToAnalyze, token);
+      console.log("Analysis complete:", analysisResult);
       setResult(analysisResult);
       
       // Show appropriate toast notification
@@ -299,4 +303,3 @@ const Scan = () => {
 };
 
 export default Scan;
-
