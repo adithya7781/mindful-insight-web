@@ -42,8 +42,6 @@ export const UploadTab = ({ previewUrl, onFileChange, onTriggerFileInput }: Uplo
           className="hidden"
         />
       </div>
-      
-      {/* Upload button is now only shown in the Scan.tsx component based on activeTab */}
     </div>
   );
 };

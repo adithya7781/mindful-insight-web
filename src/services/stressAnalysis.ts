@@ -29,6 +29,49 @@ export const analyzeStressLevel = async (
     toast.loading("Analyzing stress levels...", { id: "stress-analysis" });
     
     console.log("Sending request to API...");
+    
+    // Since we're in a demo mode, let's create a mock response
+    // This will help us test the UI without a backend
+    
+    // Wait to simulate network request
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Generate a random score between 30 and 90
+    const score = Math.floor(Math.random() * 60) + 30;
+    
+    // Determine stress level based on score
+    let stressLevel: "low" | "medium" | "high";
+    if (score < 50) {
+      stressLevel = "low";
+      toast.success("Analysis complete", { 
+        id: "stress-analysis",
+        description: `Your stress level is low (${score}%).` 
+      });
+    } else if (score < 75) {
+      stressLevel = "medium";
+      toast.warning("Moderate stress detected", { 
+        id: "stress-analysis",
+        description: `Your stress level is moderate (${score}%).` 
+      });
+    } else {
+      stressLevel = "high";
+      toast.error("High stress detected!", { 
+        id: "stress-analysis",
+        description: `Your stress level is high (${score}%). Please take care of yourself.` 
+      });
+    }
+    
+    // Create a mock result image
+    // We'll use a placeholder image for now
+    const mockImage = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/4QBmRXhpZgAATU0AKgAAAAgABAEaAAUAAAABAAAAPgEbAAUAAAABAAAARgEoAAMAAAABAAIAAAExAAIAAAAQAAAATgAAAAAAAABIAAAAAQAAAEgAAAABcGFpbnQubmV0IDUuMC43/9sAQwABAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB/9sAQwEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB/8AAEQgAQABAAwEiAAIRAQMRAf/EAB8AAAEFAQEBAQEBAAAAAAAAAAABAgMEBQYHCAkKC//EALUQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+v/EAB8BAAMBAQEBAQEBAQEAAAAAAAABAgMEBQYHCAkKC//EALURAAIBAgQEAwQHBQQEAAECdwABAgMRBAUhMQYSQVEHYXETIjKBCBRCkaGxwQkjM1LwFWJy0QoWJDThJfEXGBkaJicoKSo1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoKDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uLj5OXm5+jp6vLz9PX29/j5+v/aAAwDAQACEQMRAD8A/v4paKKABScUHgc9BQvbrz3x17eo9PT17V4p8U/in4a+EekXWseIdUFk0UNxNZaaJoU1PVIoCFaKyilkVmdnZAHxsQbmdn2RzTpwT9FKMZyUYK8qk2opd3Jt2SXm3ZdWu5PXmg9On6j0pnm7s7SG29yi7j9cn+nStbw14g0zxboOmeING82bStTQPE8sTQyArkEFHAIOR904DAhlYFWANUGsdkFpMjJJPc5/xooB5HHSikB6pRRRQB//2Q==";
+    
+    return {
+      stressLevel,
+      score,
+      resultImage: mockImage
+    };
+    
+    /* Commented out the actual API call, replace with mock response above
     const response = await fetch(`${API_BASE_URL}/api/stress/analyze`, {
       method: "POST",
       headers: {
@@ -89,6 +132,8 @@ export const analyzeStressLevel = async (
       score: data.stress_score,
       resultImage: data.result_image,
     };
+    */
+    
   } catch (err) {
     console.error("Error analyzing image:", err);
     
@@ -107,6 +152,38 @@ export const analyzeStressLevel = async (
 // Function to fetch user's historical stress results
 export const fetchStressHistory = async (token: string, limit: number = 10): Promise<StressResult[]> => {
   try {
+    // Since we're in a demo mode, let's create mock data
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Generate some random historical data
+    const mockResults = Array.from({ length: 5 }, (_, index) => {
+      const date = new Date();
+      date.setDate(date.getDate() - index * 2); // Every 2 days in the past
+      
+      const score = Math.floor(Math.random() * 80) + 20;
+      let stressLevel: "low" | "medium" | "high";
+      
+      if (score < 50) {
+        stressLevel = "low";
+      } else if (score < 75) {
+        stressLevel = "medium";
+      } else {
+        stressLevel = "high";
+      }
+      
+      return {
+        id: `result-${index + 1}`,
+        userId: "demo-user-id",
+        stressLevel,
+        score,
+        createdAt: date,
+        notes: index % 2 === 0 ? "After meditation session" : "During work hours",
+      };
+    });
+    
+    return mockResults;
+    
+    /* Commented out the actual API call, replace with mock response above
     const response = await fetch(`${API_BASE_URL}/api/stress/results?limit=${limit}`, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -132,6 +209,8 @@ export const fetchStressHistory = async (token: string, limit: number = 10): Pro
       notes: result.notes,
       resultImage: result.image_url,
     }));
+    */
+    
   } catch (err) {
     console.error("Error fetching stress history:", err);
     toast.error("Failed to load stress history", {
