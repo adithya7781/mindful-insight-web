@@ -6,6 +6,26 @@ import { toast } from "sonner";
 // API URL from environment or fallback to deployed API
 const API_BASE_URL = import.meta.env.VITE_API_URL || "https://workplace-wellness-api.onrender.com";
 
+// Test users for offline/demo mode
+const TEST_USERS = {
+  "demo@example.com": {
+    id: "demo-user-id",
+    name: "Demo User",
+    email: "demo@example.com",
+    password: "demo@123",
+    role: "user",
+    is_approved: true,
+  },
+  "admin@example.com": {
+    id: "admin-user-id",
+    name: "Admin User",
+    email: "admin@example.com",
+    password: "admin@123",
+    role: "admin",
+    is_approved: true,
+  }
+};
+
 // Initial auth state
 const initialState: AuthState = {
   user: null,
@@ -32,6 +52,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!token) {
         setState({ user: null, isLoading: false, error: null });
         return;
+      }
+      
+      // Check if it's a demo token
+      try {
+        const demoData = JSON.parse(atob(token.split('.')[1]));
+        if (demoData && demoData.isDemoUser) {
+          // Restore demo user from localStorage
+          const storedUser = localStorage.getItem("demoUser");
+          if (storedUser) {
+            const user = JSON.parse(storedUser);
+            setState({
+              user,
+              isLoading: false,
+              error: null,
+            });
+            return;
+          }
+        }
+      } catch (err) {
+        // Not a demo token, continue with normal flow
       }
       
       try {
@@ -77,6 +117,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     setState((prevState) => ({ ...prevState, isLoading: true, error: null }));
     
+    // Check if this is a test user for offline/demo mode
+    const testUser = TEST_USERS[email.toLowerCase()];
+    if (testUser && testUser.password === password) {
+      // Create a demo user object without the password
+      const demoUser = { ...testUser };
+      delete demoUser.password;
+      
+      // Create a simple demo token
+      const demoToken = createDemoToken(demoUser.id);
+      
+      // Store token and user in localStorage
+      localStorage.setItem("token", demoToken);
+      localStorage.setItem("demoUser", JSON.stringify(demoUser));
+      
+      setState({
+        user: demoUser,
+        isLoading: false,
+        error: null,
+      });
+      
+      toast.success("Logged in successfully");
+      return;
+    }
+    
     try {
       // Try to connect to backend
       const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
@@ -110,18 +174,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error("Login error:", error);
+      
+      // Check if this is a test user as fallback after connection error
+      const testUser = TEST_USERS[email.toLowerCase()];
+      if (testUser && testUser.password === password) {
+        // Create a demo user object without the password
+        const demoUser = { ...testUser };
+        delete demoUser.password;
+        
+        // Create a simple demo token
+        const demoToken = createDemoToken(demoUser.id);
+        
+        // Store token and user in localStorage
+        localStorage.setItem("token", demoToken);
+        localStorage.setItem("demoUser", JSON.stringify(demoUser));
+        
+        setState({
+          user: demoUser,
+          isLoading: false,
+          error: null,
+        });
+        
+        toast.success("Logged in successfully");
+        return;
+      }
+      
       setState({
         user: null,
         isLoading: false,
-        error: "Connection error. Please try again later.",
+        error: "Invalid email or password",
       });
-      toast.error("Connection error. Please check your internet connection and try again.");
+      toast.error("Invalid email or password");
     }
+  };
+
+  // Create a simple demo token
+  const createDemoToken = (userId: string) => {
+    // Create a very simple JWT-like token structure
+    const header = btoa(JSON.stringify({ alg: "none", typ: "JWT" }));
+    const payload = btoa(JSON.stringify({ 
+      user_id: userId,
+      isDemoUser: true,
+      exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours
+    }));
+    const signature = btoa("demo-signature");
+    
+    return `${header}.${payload}.${signature}`;
   };
 
   // Logout function
   const logout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("demoUser");
     setState({
       user: null,
       isLoading: false,

@@ -22,13 +22,10 @@ const LoginForm = () => {
     
     try {
       await login(email, password);
-      toast({
-        title: "Login successful",
-        description: "Welcome back!",
-      });
-      navigate("/dashboard");
+      // Navigation will happen in useEffect in the Login component
     } catch (err) {
       // Error is handled by the auth context
+      console.error("Login form error:", err);
     }
   };
 
@@ -42,6 +39,17 @@ const LoginForm = () => {
   };
 
   const isFormValid = validateEmail(email) && validatePassword(password);
+
+  // Demo credential options
+  const setDemoCredentials = () => {
+    setEmail("demo@example.com");
+    setPassword("demo@123");
+  };
+
+  const setAdminCredentials = () => {
+    setEmail("admin@example.com");
+    setPassword("admin@123");
+  };
 
   return (
     <Card className="w-full max-w-md">
@@ -96,6 +104,28 @@ const LoginForm = () => {
             >
               {isLoading ? "Signing in..." : "Sign In"}
             </Button>
+            
+            <div className="text-xs text-center text-muted-foreground mt-2">
+              Try our demo accounts:
+              <div className="flex justify-center gap-2 mt-1">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  type="button"
+                  onClick={setDemoCredentials}
+                >
+                  Demo User
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  type="button"
+                  onClick={setAdminCredentials}
+                >
+                  Admin
+                </Button>
+              </div>
+            </div>
           </div>
         </form>
       </CardContent>
