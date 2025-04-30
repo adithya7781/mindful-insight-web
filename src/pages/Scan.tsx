@@ -1,6 +1,7 @@
+
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, Camera, Loader2, RefreshCw, Check, UploadCloud } from "lucide-react";
+import { AlertCircle, Camera, Loader2, RefreshCw, Check, UploadCloud, XCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
