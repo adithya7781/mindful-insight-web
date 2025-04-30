@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, AuthState } from "@/types";
 import { toast } from "sonner";
@@ -131,8 +130,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem("token", demoToken);
       localStorage.setItem("demoUser", JSON.stringify(demoUser));
       
+      // Convert the demo user to match the User type in our application
+      const formattedUser: User = {
+        id: demoUser.id,
+        name: demoUser.name,
+        email: demoUser.email,
+        role: demoUser.role as "admin" | "user",
+        isApproved: demoUser.is_approved,
+        createdAt: new Date()
+      };
+      
       setState({
-        user: demoUser,
+        user: formattedUser,
         isLoading: false,
         error: null,
       });
@@ -189,8 +198,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem("token", demoToken);
         localStorage.setItem("demoUser", JSON.stringify(demoUser));
         
+        // Convert the demo user to match the User type in our application
+        const formattedUser: User = {
+          id: demoUser.id,
+          name: demoUser.name,
+          email: demoUser.email,
+          role: demoUser.role as "admin" | "user",
+          isApproved: demoUser.is_approved,
+          createdAt: new Date()
+        };
+        
         setState({
-          user: demoUser,
+          user: formattedUser,
           isLoading: false,
           error: null,
         });
