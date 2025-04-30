@@ -1,4 +1,3 @@
-
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -60,30 +59,7 @@ export const CameraTab = ({
         )}
       </div>
       
-      {/* Only show controls when NO image has been captured */}
-      {!capturedImage && (
-        <div className="flex justify-center">
-          {!cameraActive ? (
-            <Button onClick={onStartCamera}>
-              <Camera className="mr-2 h-4 w-4" />
-              Start Camera
-            </Button>
-          ) : (
-            <div className="flex space-x-2">
-              <Button onClick={onCapture}>
-                <Camera className="mr-2 h-4 w-4" />
-                Capture
-              </Button>
-              <Button variant="outline" onClick={onStopCamera}>
-                <XCircle className="mr-2 h-4 w-4" />
-                Cancel
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
-      
-      {/* Hidden canvas for image capture */}
+      {/* Camera controls are now handled in the Scan.tsx component */}
       <canvas ref={canvasRef} className="hidden" />
     </div>
   );

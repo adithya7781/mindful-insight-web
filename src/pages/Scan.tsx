@@ -1,7 +1,6 @@
-
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, Camera, Loader2, RefreshCw, Check } from "lucide-react";
+import { AlertCircle, Camera, Loader2, RefreshCw, Check, UploadCloud } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -246,6 +245,28 @@ const Scan = () => {
                     onStopCamera={stopCamera}
                     onCapture={captureImage}
                   />
+                  
+                  {!capturedImage && (
+                    <div className="flex justify-center mt-4">
+                      {!cameraActive ? (
+                        <Button onClick={startCamera}>
+                          <Camera className="mr-2 h-4 w-4" />
+                          Start Camera
+                        </Button>
+                      ) : (
+                        <div className="flex space-x-2">
+                          <Button onClick={captureImage}>
+                            <Camera className="mr-2 h-4 w-4" />
+                            Capture
+                          </Button>
+                          <Button variant="outline" onClick={stopCamera}>
+                            <XCircle className="mr-2 h-4 w-4" />
+                            Cancel
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </TabsContent>
                 
                 <TabsContent value="upload">
@@ -254,6 +275,15 @@ const Scan = () => {
                     onFileChange={handleFileChange}
                     onTriggerFileInput={triggerFileInput}
                   />
+                  
+                  {!previewUrl && (
+                    <div className="flex justify-center mt-4">
+                      <Button onClick={triggerFileInput}>
+                        <UploadCloud className="mr-2 h-4 w-4" />
+                        Upload Image
+                      </Button>
+                    </div>
+                  )}
                 </TabsContent>
               </Tabs>
             )}

@@ -43,15 +43,7 @@ export const UploadTab = ({ previewUrl, onFileChange, onTriggerFileInput }: Uplo
         />
       </div>
       
-      {/* Only show upload button when NO image has been uploaded */}
-      {!previewUrl && (
-        <div className="flex justify-center">
-          <Button onClick={onTriggerFileInput}>
-            <UploadCloud className="mr-2 h-4 w-4" />
-            Upload Image
-          </Button>
-        </div>
-      )}
+      {/* Upload button is now only shown in the Scan.tsx component based on activeTab */}
     </div>
   );
 };
