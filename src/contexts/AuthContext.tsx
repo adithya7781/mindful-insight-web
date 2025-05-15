@@ -52,7 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setState({ user: null, isLoading: false, error: null });
         return;
       }
-      
+
       // Check if it's a demo token
       try {
         const demoData = JSON.parse(atob(token.split('.')[1]));
@@ -61,8 +61,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const storedUser = localStorage.getItem("demoUser");
           if (storedUser) {
             const user = JSON.parse(storedUser);
+            // Force isApproved to true for demo user, no matter what's in localStorage
             setState({
-              user,
+              user: {
+                ...user,
+                isApproved: true,
+              },
               isLoading: false,
               error: null,
             });
@@ -72,7 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (err) {
         // Not a demo token, continue with normal flow
       }
-      
+
       try {
         // Verify token with backend
         const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
@@ -137,7 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: demoUser.email,
         role: demoUser.role as "admin" | "user",
         // Fix: correctly map is_approved (snake_case) to isApproved (camelCase)!
-        isApproved: demoUser.is_approved === undefined ? true : demoUser.is_approved,
+        isApproved: true,
         createdAt: new Date()
       };
       
@@ -205,7 +209,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: demoUser.name,
           email: demoUser.email,
           role: demoUser.role as "admin" | "user",
-          isApproved: demoUser.is_approved,
+          isApproved: true,
           createdAt: new Date()
         };
         
