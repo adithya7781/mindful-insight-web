@@ -1,4 +1,3 @@
-
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertCircle, Camera, Loader2, RefreshCw, Check, UploadCloud, XCircle } from "lucide-react";
@@ -275,6 +274,7 @@ const Scan = () => {
                     previewUrl={previewUrl}
                     onFileChange={handleFileChange}
                     onTriggerFileInput={triggerFileInput}
+                    fileInputRef={fileInputRef}
                   />
                   
                   {!previewUrl && (

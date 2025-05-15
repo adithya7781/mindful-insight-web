@@ -7,11 +7,10 @@ interface UploadTabProps {
   previewUrl: string | null;
   onFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onTriggerFileInput: () => void;
+  fileInputRef: React.RefObject<HTMLInputElement>; // <-- NEW prop
 }
 
-export const UploadTab = ({ previewUrl, onFileChange, onTriggerFileInput }: UploadTabProps) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
+export const UploadTab = ({ previewUrl, onFileChange, onTriggerFileInput, fileInputRef }: UploadTabProps) => {
   return (
     <div className="w-full">
       <div
