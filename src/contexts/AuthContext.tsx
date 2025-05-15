@@ -136,7 +136,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name: demoUser.name,
         email: demoUser.email,
         role: demoUser.role as "admin" | "user",
-        isApproved: demoUser.is_approved,
+        // Fix: correctly map is_approved (snake_case) to isApproved (camelCase)!
+        isApproved: demoUser.is_approved === undefined ? true : demoUser.is_approved,
         createdAt: new Date()
       };
       
